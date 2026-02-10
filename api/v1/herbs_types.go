@@ -30,9 +30,10 @@ type HerbsSpec struct {
 	// The following markers will use OpenAPI v3 schema to validate the value
 	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
 
-	// foo is an example field of Herbs. Edit herbs_types.go to remove/update
-	// +optional
-	Foo *string `json:"foo,omitempty"`
+	// Check that its either basil, lettuce, or spinach
+	// +kubebuilder:validation:Enum=basil;lettuce;spinach
+	// +kubebuilder:validation:Required
+	Plant string `json:"plant,omitempty"`
 }
 
 // HerbsStatus defines the observed state of Herbs.
@@ -42,6 +43,10 @@ type HerbsStatus struct {
 
 	// For Kubernetes API conventions, see:
 	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
+
+	// temperature represents the current temperature reading from the sensor system
+	// +optional
+	Temperature int `json:"temperature,omitempty"`
 
 	// conditions represent the current state of the Herbs resource.
 	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
@@ -60,6 +65,8 @@ type HerbsStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="TempReady",type=string,JSONPath=`.status.conditions[?(@.type=="TempReady")].status`
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 
 // Herbs is the Schema for the herbs API
 type Herbs struct {
@@ -89,4 +96,46 @@ type HerbsList struct {
 
 func init() {
 	SchemeBuilder.Register(&Herbs{}, &HerbsList{})
+}
+
+var ConditionTempReadyTrue = metav1.Condition{
+	Type:    "TempReady",
+	Status:  metav1.ConditionTrue,
+	Reason:  "TemperatureMatches",
+	Message: "Temperature matches desired state",
+}
+
+var ConditionTempReadyFalse = metav1.Condition{
+	Type:    "TempReady",
+	Status:  metav1.ConditionFalse,
+	Reason:  "TemperatureMismatch",
+	Message: "Temperature does not match desired state",
+}
+
+var ConditionReadyTrue = metav1.Condition{
+	Type:    "Ready",
+	Status:  metav1.ConditionTrue,
+	Reason:  "AllConditionsReady",
+	Message: "All conditions are ready",
+}
+
+var ConditionReadyFalse = metav1.Condition{
+	Type:    "Ready",
+	Status:  metav1.ConditionFalse,
+	Reason:  "NotReady",
+	Message: "Not all conditions are ready",
+}
+
+var ConditionTempReadyUnknown = metav1.Condition{
+	Type:    "TempReady",
+	Status:  metav1.ConditionUnknown,
+	Reason:  "ReconciliationError",
+	Message: "Cannot read temperature due to error",
+}
+
+var ConditionReadyError = metav1.Condition{
+	Type:    "Ready",
+	Status:  metav1.ConditionFalse,
+	Reason:  "ReconciliationError",
+	Message: "Cannot determine readiness due to reconciliation error",
 }
