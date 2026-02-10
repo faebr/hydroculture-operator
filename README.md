@@ -1,16 +1,146 @@
 # hydroculture-operator
-// TODO(user): Add simple overview of use/purpose
 
-## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+**Demo project for Container Days London 2026**  
+Talk: *"defer: The Silent Hero of Kubernetes Operators"*
 
-## Getting Started
+A Kubernetes operator that manages hudroculture gardens by monitoring and adjusting temperature. This project demonstrates best practices for using Go's `defer` statement to manage status conditions in Kubernetes operators.
+
+## What This Demonstrates
+
+This operator showcases:
+- **Defer for status updates**: Ensures conditions are always set, even on error paths
+- **Error sanitization**: Strips stack traces for user-friendly condition messages
+- **Dynamic requeue intervals**: Adjusts retry timing based on reconciliation state
+- **Centralized condition logic**: All condition management in one place
+
+## Quick Start with Kind
 
 ### Prerequisites
-- go version v1.24.6+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.11.3+ cluster.
+- [Kind](https://kind.sigs.k8s.io/) v0.20.0+
+- [kubectl](https://kubernetes.io/docs/tasks/tools/) v1.28.0+
+- [Go](https://go.dev/dl/) v1.24.6+
+
+### 1. Create a Kind Cluster
+ How It Works
+
+### The Defer Pattern
+
+The key pattern demonstrated in this operator is the use of `defer` to manage status conditions:
+
+```go
+defer func() {
+    conditionResult, conditionErr := r.updateConditions(ctx, herbs, reconcileErr)
+    if conditionErr != nil {
+        log.Error(conditionErr, "Failed to update conditions")
+        reconcileErr = errors.Join(reconcileErr, conditionErr)
+    }
+    // Defer can override the requeue interval
+    if conditionResult.RequeueAfter > 0 {
+        result = conditionResult
+    }
+}()
+```
+
+**Benefits:**
+- ✅ Conditions are **always** updated, regardless of which return path is taken
+- ✅ Errors are **sanitized** for user-friendly messages
+- ✅ Requeue intervals are **dynamically adjusted** based on state
+- ✅ All condition logic is **centralized** in one function
+
+### Supported Plants
+
+- **Basil**: Ideal temperature 24°C
+- **Lettuce**: Ideal temperature 20°C  
+- **Spinach**: Ideal temperature 18°C
+
+### Status Conditions
+
+- `TempReady`: Indicates if the temperature matches the ideal for the plant
+- `Ready`: Overall readiness of the herb garden
+
+## Advanced Deployment
+
+##
+```sh
+kind create cluster --name hydroculture-demo
+```
+
+### 2. Install the CRDs
+
+```sh
+make install
+```
+
+### 3. Run the Operator Locally
+
+```sh
+make run
+```
+
+The operator will start and connect to your Kind cluster. Leave this running in your terminal.
+
+### 4. Create a Temperature ConfigMap
+
+Open a new terminal and create a ConfigMap to simulate the temperature sensor:
+
+```sh
+kubectl create namespace demo
+kubectl create configmap temperature -n demo --from-literal=value=22
+```
+
+### 5. Deploy a Herbs Resource
+
+```sh
+cat <<EOF | kubectl apply -f -
+apiVersion: hydroculture.containerdays.io/v1
+kind: Herbs
+metadata:
+  name: basil-garden
+  namespace: demo
+spec:
+  plant: basil
+EOF
+```
+
+### 6. Watch the Operator in Action
+
+```sh
+# Watch the status conditions
+kubectl get herbs -n demo basil-garden -o yaml -w
+
+# Or use kubectl describe
+kubectl describe herbs -n demo basil-garden
+```
+
+You'll see the operator detecting that the temperature (22°C) is below the ideal for basil (24°C), and the conditions reflecting this state.
+
+### 7. Adjust the Temperature
+
+Simulate the heating system working by updating the temperature:
+
+```sh
+kubectl patch configmap temperature -n demo --type merge -p '{"data":{"value":"24"}}'
+```
+
+Watch the conditions change to `Ready=True` and `TempReady=True` once the ideal temperature is reached!
+
+### 8. Test Error Handling
+
+Delete the ConfigMap to see how the operator handles errors:
+
+```sh
+kubectl delete configmap temperature -n demo
+```
+
+Notice how the defer pattern ensures conditions are set even when errors occur, with sanitized error messages in the status.
+
+### 9. Cleanup
+
+```sh
+kubectl delete herbs -n demo basil-garden
+kubectl delete namespace demo
+kind delete cluster --name hydroculture-demo
+```
 
 ### To Deploy on the cluster
 **Build and push your image to the location specified by `IMG`:**
@@ -71,12 +201,20 @@ make undeploy
 Following the options to release and provide this solution to the users.
 
 ### By providing a bundle with all YAML files
+Learn More
 
-1. Build the installer for the image built and published in the registry:
+- [Kubebuilder Documentation](https://book.kubebuilder.io/)
+- [Kubernetes Operator Pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/)
+- [Controller Runtime](https://github.com/kubernetes-sigs/controller-runtime)
 
-```sh
-make build-installer IMG=<some-registry>/hydroculture-operator:tag
-```
+**NOTE:** Run `make help` for more information on all potential `make` targets
+
+## Conference Resources
+
+**Container Days London 2026**  
+Talk: *"defer: The Silent Hero of Kubernetes Operators"*
+
+This demo showcases production patterns for status management in Kubernetes operators using Go's defer statement. Check the [internal/controller/herbs_controller.go](internal/controller/herbs_controller.go) file to see the defer pattern in action!
 
 **NOTE:** The makefile target mentioned above generates an 'install.yaml'
 file in the dist directory. This file contains all the resources built
@@ -132,4 +270,3 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-
